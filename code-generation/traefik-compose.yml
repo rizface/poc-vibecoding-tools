@@ -1,0 +1,19 @@
+services:
+  traefik:
+    container_name: code_generation_traefik
+    image: traefik:v3.6
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - code_generation
+networks:
+  code_generation:
+    name: code_generation

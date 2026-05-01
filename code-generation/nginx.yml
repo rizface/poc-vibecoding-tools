@@ -1,0 +1,30 @@
+services:
+  traefik:
+    container_name: nginx_test_traefik
+    image: traefik:v3.6
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8081:8080"
+    networks:
+      - nginx_test_traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  nginx_test:
+    container_name: nginx_test
+    image: nginx:latest
+    networks:
+      - nginx_test_traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nginx_test.rule=Host(`nginx_test.docker.localhost`)"
+      - "traefik.http.routers.nginx_test.entrypoints=web"
+    volumes:
+      - /home/fariz/code-generation/da5bf80b-0448-49f4-801d-bc04738a8148:/usr/share/nginx/html
+    #   - ./nginx.conf:/etc/nginx/nginx.conf:ro
+networks:
+  nginx_test_traefik:

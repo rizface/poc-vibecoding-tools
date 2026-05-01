@@ -1,0 +1,23 @@
+# Go
+code-generation/poc-code-generation
+code-generation/tmp/
+
+# Node
+code-generation-fe/node_modules/
+code-generation-fe/.next/
+code-generation-fe/tsconfig.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

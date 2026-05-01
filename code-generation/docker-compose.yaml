@@ -1,0 +1,8 @@
+services:
+  pg_code_generation:
+    container_name: pg_code_generation
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres # Required: set a strong password
+    ports:
+      - "5432:5432"
