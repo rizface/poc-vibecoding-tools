@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: action/checkout@v5
+        uses: action/checkout@v4
       - name: install golang
         uses: actions/setup-go@v6
         with:
