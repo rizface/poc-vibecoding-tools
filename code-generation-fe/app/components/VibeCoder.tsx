@@ -13,18 +13,17 @@ interface Project {
 }
 
 interface ProjectListItem {
-  projectId: string;
+  id: string;
   name: string;
   host: string;
   updatedAt?: string;
 }
 
 interface ChatMessage {
-  ID: string;
-  Chat: string;
-  Response?: string;
-  CreatedAt: string;
-  ProjectID: string;
+  id: string;
+  chat: string;
+  response?: string;
+  createdAt: string;
 }
 
 interface ProjectFile {
@@ -61,13 +60,13 @@ export default function VibeCoder() {
       fetch(`/api/project/${p.id}/files`).then((r) => r.json()).catch(() => null),
       fetch(`/api/project/${p.id}/chat-history`).then((r) => r.json()).catch(() => null),
     ]).then(([projectData, filesData, chatData]) => {
-      if (projectData?.data) {
-        const updated = { ...p, hostPort: projectData.data.hostPort };
+      if (projectData?.data?.doc) {
+        const updated = { ...p, hostPort: projectData.data.doc.port };
         setProject(updated);
         localStorage.setItem("vc_project", JSON.stringify(updated));
       }
-      if (filesData?.files) setFiles(filesData.files);
-      if (chatData?.data) setChatHistory(chatData.data);
+      if (filesData?.data?.docs) setFiles(filesData.data.docs);
+      if (chatData?.data?.docs) setChatHistory(chatData.data.docs);
     });
   };
 
@@ -90,7 +89,7 @@ export default function VibeCoder() {
     const optimisticId = `optimistic-${Date.now()}`;
     setChatHistory((prev) => [
       ...prev,
-      { ID: optimisticId, Chat: activePrompt.trim(), CreatedAt: new Date().toISOString(), ProjectID: activeProject.id },
+      { id: optimisticId, chat: activePrompt.trim(), createdAt: new Date().toISOString() },
     ]);
     setPrompt("");
 
@@ -128,44 +127,38 @@ export default function VibeCoder() {
           }
           const data = dataLines.join("\n");
           if (eventType === "error") throw new Error(data || "Generation error");
-          if (eventType === "done" && data) {
+          if (eventType === "doneChatGeneration" && data) {
             try {
-              const parsed = JSON.parse(data) as {
-                readyToExecute?: boolean;
-                response?: string;
-                files?: ProjectFile[];
+              const outer = JSON.parse(data) as {
+                messageComplete: boolean;
+                data: { readyToExecute: boolean; response: string };
               };
-              if (typeof parsed.readyToExecute === "boolean") {
-                if (parsed.response) {
-                  setChatHistory((prev) =>
-                    prev.map((m) =>
-                      m.ID === optimisticId ? { ...m, Response: parsed.response } : m
-                    )
-                  );
-                }
-                if (parsed.readyToExecute) {
-                  setExecuting(true);
-                  setFiles([]);
-                  setSelectedFile(null);
-                  if (Array.isArray(parsed.files)) {
-                    setFiles(parsed.files);
-                  }
-                }
-              } else if (Array.isArray(parsed.files)) {
-                setFiles(parsed.files);
-                setExecuting(false);
+              if (outer?.data?.readyToExecute) {
+                setExecuting(true);
+                setFiles([]);
+                setSelectedFile(null);
               }
+            } catch (_) { /* ignore */ }
+          }
+          if (eventType === "doneCodeGeneration" && data) {
+            try {
+              const outer = JSON.parse(data) as { messageComplete: boolean; data: string };
+              const inner = JSON.parse(outer.data) as { files: ProjectFile[] };
+              if (Array.isArray(inner.files)) {
+                setFiles(inner.files);
+              }
+              setExecuting(false);
             } catch (_) {
               fetch(`/api/project/${activeProject.id}/files`)
                 .then((r) => r.json())
-                .then((d) => { if (d.files) setFiles(d.files); })
+                .then((d) => { if (d?.data?.docs) setFiles(d.data.docs); })
                 .catch(() => {});
             }
           }
         }
       }
     } catch (err: unknown) {
-      setChatHistory((prev) => prev.filter((m) => m.ID !== optimisticId));
+      setChatHistory((prev) => prev.filter((m) => m.id !== optimisticId));
       setPrompt(activePrompt);
       setGenerateError((err as Error).message);
     } finally {
@@ -175,12 +168,12 @@ export default function VibeCoder() {
       fetch(`/api/project/${activeProject.id}/chat-history?only_last_chat=true`)
         .then((r) => r.json())
         .then((d) => {
-          if (d?.data?.length) {
-            const latest: ChatMessage = d.data[0];
+          if (d?.data?.docs?.length) {
+            const latest: ChatMessage = d.data.docs[0];
             setChatHistory((prev) => {
-              const exists = prev.some((m) => m.ID === latest.ID);
-              const filtered = prev.filter((m) => m.ID !== optimisticId);
-              return exists ? filtered.map((m) => m.ID === latest.ID ? latest : m) : [...filtered, latest];
+              const filtered = prev.filter((m) => m.id !== optimisticId);
+              const exists = filtered.some((m) => m.id === latest.id);
+              return exists ? filtered.map((m) => (m.id === latest.id ? latest : m)) : [...filtered, latest];
             });
           }
         })
@@ -199,7 +192,7 @@ export default function VibeCoder() {
   };
 
   const handleOpenProject = (item: ProjectListItem) => {
-    openProject({ id: item.projectId, host: item.host, hostPort: "", name: item.name });
+    openProject({ id: item.id, host: item.host, hostPort: "", name: item.name });
   };
 
   const handleDeleteProject = async (id: string) => {
@@ -286,7 +279,7 @@ function HomepageView({
   useEffect(() => {
     fetch("/api/project")
       .then((r) => r.json())
-      .then((d) => setProjects(d.data || []))
+      .then((d) => setProjects(d.data?.docs || []))
       .catch(() => {});
   }, []);
 
@@ -309,7 +302,7 @@ function HomepageView({
       const data = await res.json();
       if (!res.ok) throw new Error(data.err || data.error || "Failed to create project");
       onProjectCreated(
-        { id: data.data.projectId, host: data.data.host, hostPort: data.data.hostPort, name },
+        { id: data.data.doc.projectId, host: data.data.doc.host, hostPort: data.data.doc.hostPort, name },
         prompt.trim()
       );
     } catch (err: unknown) {
@@ -323,7 +316,7 @@ function HomepageView({
     if (!confirm("Delete this project? This cannot be undone.")) return;
     setDeletingId(id);
     await onDeleteProject(id);
-    setProjects((prev) => prev.filter((p) => p.projectId !== id));
+    setProjects((prev) => prev.filter((p) => p.id !== id));
     setDeletingId(null);
   };
 
@@ -441,11 +434,11 @@ function HomepageView({
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {projects.map((p) => (
                 <ProjectCard
-                  key={p.projectId}
+                  key={p.id}
                   project={p}
-                  deleting={deletingId === p.projectId}
+                  deleting={deletingId === p.id}
                   onClick={() => onOpenProject(p)}
-                  onDelete={(e) => handleDelete(e, p.projectId)}
+                  onDelete={(e) => handleDelete(e, p.id)}
                 />
               ))}
             </div>
@@ -608,7 +601,7 @@ function ProjectCard({
         className="w-full"
         style={{
           aspectRatio: "16/9",
-          background: projectGradient(project.projectId),
+          background: projectGradient(project.id),
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -957,7 +950,7 @@ function PromptPanel({
               </div>
             )}
             {chatHistory.map((msg) => (
-              <div key={msg.ID} className="flex flex-col gap-2">
+              <div key={msg.id} className="flex flex-col gap-2">
                 <div className="flex justify-end">
                   <div
                     className="max-w-[88%] rounded-2xl rounded-tr-sm px-3 py-2 cursor-pointer vc-markdown vc-markdown-user"
@@ -965,15 +958,15 @@ function PromptPanel({
                       background: "rgba(79,70,229,0.2)",
                       border: "1px solid rgba(99,102,241,0.25)",
                     }}
-                    onClick={() => onSelectPrompt(msg.Chat)}
+                    onClick={() => onSelectPrompt(msg.chat)}
                   >
-                    <Markdown>{msg.Chat}</Markdown>
+                    <Markdown>{msg.chat}</Markdown>
                     <p className="text-[10px] mt-1 text-right" style={{ color: "#6366f1" }}>
-                      {formatTime(msg.CreatedAt)}
+                      {formatTime(msg.createdAt)}
                     </p>
                   </div>
                 </div>
-                {msg.Response && (
+                {msg.response && (
                   <div className="flex justify-start">
                     <div
                       className="max-w-[88%] rounded-2xl rounded-tl-sm px-3 py-2 vc-markdown"
@@ -982,7 +975,7 @@ function PromptPanel({
                         border: "1px solid rgba(255,255,255,0.08)",
                       }}
                     >
-                      <Markdown>{msg.Response}</Markdown>
+                      <Markdown>{msg.response}</Markdown>
                     </div>
                   </div>
                 )}

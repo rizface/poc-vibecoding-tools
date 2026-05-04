@@ -1,25 +1,17 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rizface/poc-code-generation/container"
+	"github.com/rizface/poc-code-generation/handler"
+	"github.com/rizface/poc-code-generation/repository"
+	"github.com/rizface/poc-code-generation/service"
 	dockerClient "github.com/moby/moby/client"
-	"google.golang.org/genai"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"context"
 )
-
-var homeDir string
-
-func openDB() (*gorm.DB, error) {
-	dsn := "host=localhost user=postgres password=postgres dbname=postgres port=5432 sslmode=disable TimeZone=Asia/Jakarta"
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-
-	return db, err
-}
 
 func panicIfErr(err error) {
 	if err != nil {
@@ -27,59 +19,49 @@ func panicIfErr(err error) {
 	}
 }
 
-func openGeminiClient(ctx context.Context) error {
-	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  os.Getenv("GEMINI_API_KEY"),
-		Backend: genai.BackendGeminiAPI,
-	})
-	if err != nil {
-		return err
-	}
-
-	client = genaiClient
-
-	return nil
-}
-
 func main() {
 	ctx := context.Background()
+	config := loadConfig()
 
-	err := openGeminiClient(ctx)
+	geminiClient, err := openGeminiClient(ctx, config)
 	panicIfErr(err)
 
-	homeDir, err = os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
 	panicIfErr(err)
 
-	db, err := openDB()
+	db, err := openDB(config)
 	panicIfErr(err)
 
-	gormDB = db
+	repository.AutoMigrate(db)
 
-	db.AutoMigrate(
-		&ContainerModel{},
-		&ProjectModel{},
-		&ProjectFileModel{},
-		&ChatHistoryModel{},
-	)
-
-	dockerApiClient, err = dockerClient.New(dockerClient.FromEnv)
+	rawDockerClient, err := dockerClient.New(dockerClient.FromEnv)
 	panicIfErr(err)
+
+	dockerCli := container.NewDockerClient(rawDockerClient)
+
+	projectRepo := repository.NewProjectRepository(db)
+	containerRepo := repository.NewContainerRepository(db)
+	projectFileRepo := repository.NewProjectFileRepository(db)
+	chatHistoryRepo := repository.NewChatHistoryRepository(db)
+
+	projectSvc := service.NewProjectFileService(homeDir, projectRepo, containerRepo, projectFileRepo, dockerCli)
+	chatHistorySvc := service.NewChatHistoryService(chatHistoryRepo)
+	generationSvc := service.NewGenerationService(homeDir, geminiClient, chatHistoryRepo, projectFileRepo)
+
+	projectHandler := handler.NewProjectHandler(projectSvc)
+	chatHistoryHandler := handler.NewChatHistoryHandler(chatHistorySvc)
+	generationHandler := handler.NewGenerationHandler(generationSvc)
 
 	r := gin.Default()
 
 	r.GET("/ping", ping)
-	r.POST("/action/generate-stream", generateStream)
-	r.GET("/project", listProjects)
-	r.POST("/project", createOneProject)
-	r.GET("/project/:id", getOneProject)
-	r.DELETE("/project/:id", deleteProject)
-	r.GET("/project/:id/files", getProjectFiles)
-	r.GET("/project/:id/chat-history", getChatHistory)
-
-	r.POST("/start-container", func(c *gin.Context) {
-	})
-
-	r.POST("/stop-container", func(c *gin.Context) {})
+	r.POST("/action/generate-stream", generationHandler.GenerateStream)
+	r.GET("/project", projectHandler.GetListProject)
+	r.POST("/project", projectHandler.CreateProject)
+	r.GET("/project/:id", projectHandler.GetOneProject)
+	r.DELETE("/project/:id", projectHandler.DeleteProject)
+	r.GET("/project/:id/files", projectHandler.GetProjectFiles)
+	r.GET("/project/:id/chat-history", chatHistoryHandler.GetChatHistory)
 
 	if err := r.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)
