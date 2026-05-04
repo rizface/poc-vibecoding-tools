@@ -63,5 +63,5 @@ func AutoMigrate(db *gorm.DB) {
 		&ProjectModel{},
 		&ProjectFileModel{},
 		&ChatHistoryModel{},
-	)
+	) //nolint
 }
