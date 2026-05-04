@@ -58,7 +58,7 @@ func (chm ChatHistoryModel) TableName() string {
 }
 
 func AutoMigrate(db *gorm.DB) {
-	db.AutoMigrate(
+	db.AutoMigrate( //nolint:all
 		&ContainerModel{},
 		&ProjectModel{},
 		&ProjectFileModel{},
