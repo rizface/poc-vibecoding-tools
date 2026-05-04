@@ -200,7 +200,7 @@ func (gs *GenerationService) SaveGeneratedFiles(ctx context.Context, projectId s
 		writer := bufio.NewWriter(file)
 		_, writeErr := writer.WriteString(content.Code)
 		flushErr := writer.Flush()
-		file.Close() //nolint
+		file.Close() //nolint:all
 
 		if writeErr != nil {
 			return writeErr
@@ -399,11 +399,11 @@ func (gs *GenerationService) buildFileTreePrompt(files []repository.ProjectFileM
 				if err == io.EOF {
 					break
 				}
-				f.Close() //nolint
+				f.Close() //nolint:all
 				return "", err
 			}
 		}
-		f.Close() //nolint
+		f.Close() //nolint:all
 
 		contents = append(contents, fileContent{Path: v.Path, Content: code.String()})
 	}
