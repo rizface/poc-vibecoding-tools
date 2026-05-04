@@ -1,0 +1,13 @@
+version: "2"
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+
+formatters:
+  enable:
+    - gofmt
