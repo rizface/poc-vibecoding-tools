@@ -1,0 +1,23 @@
+name: Lint Backend
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'code-generation/*.go'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+      - name: install golang
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - name: install golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12
+          working-directory: code-generation
