@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - code-generation/*.go
+      - 'code-generation/*.go'
 
 jobs:
   lint:
@@ -20,7 +20,4 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12
-      - name: lint
-        run: |
-          cd code generation
-          golangci-lint run
+          working-directory: code-generation
