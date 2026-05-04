@@ -4,13 +4,13 @@ import (
 	"log"
 	"os"
 
+	"context"
 	"github.com/gin-gonic/gin"
+	dockerClient "github.com/moby/moby/client"
 	"github.com/rizface/poc-code-generation/container"
 	"github.com/rizface/poc-code-generation/handler"
 	"github.com/rizface/poc-code-generation/repository"
 	"github.com/rizface/poc-code-generation/service"
-	dockerClient "github.com/moby/moby/client"
-	"context"
 )
 
 func panicIfErr(err error) {
